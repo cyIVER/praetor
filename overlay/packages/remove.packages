@@ -1,19 +1,18 @@
-# Omarchy base packages Praetor removes to hit the efficiency budget.
+# Omarchy base packages Praetor removes. ONLY packages that Omarchy's install scripts do not
+# depend on: verified 2026-09-10 against omacom/omarchy — these are referenced solely by
+# optional bin/omarchy-{install,remove}-preinstalls, launch scripts, and menu entries.
 # Each is available again via the Praetor menu: Install > Extras.
-chromium
-1password-beta
-1password-cli
+#
+# Do NOT add: chromium (install/config/browser-policy.sh, theme-system.sh, webapps),
+# 1password (system-lock), xournalpp, dotnet-runtime-9.0, ruby, rust — installs break or
+# behave oddly without them. Trim those post-install if desired.
 kdenlive
-libreoffice-fresh
 obs-studio
+libreoffice-fresh
 signal-desktop
 spotify
 typora
-xournalpp
 pinta
-dotnet-runtime-9.0
-ruby
-rust
 
 # Not in the repos the ISO builder uses; Broadcom Wi-Fi is not present on the target hardware.
 broadcom-wl

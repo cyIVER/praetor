@@ -56,3 +56,6 @@ Pins live at the top of `build.sh`. Bump them deliberately.
   AUR-only packages belong in first-boot (`overlay/bin/praetor-first-boot`).
 - The first build takes roughly 20 minutes (offline mirror download). Later builds reuse the
   Docker image and pacman cache.
+- Removing packages from Omarchy's base list is only safe for apps its install scripts never
+  touch. Removing `chromium` halts `install/config/theme-system.sh` (it writes Chromium's
+  `initial_preferences`) and breaks webapps. See the comments in `overlay/packages/remove.packages`.
