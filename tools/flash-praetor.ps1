@@ -12,6 +12,11 @@ param(
   [string]$Log = "$PSScriptRoot\..\iso\flash.log"
 )
 $ErrorActionPreference = 'Stop'
+# .NET file APIs resolve relative paths against the process cwd (System32 when elevated),
+# so make every path absolute against the caller's location first.
+$Iso = (Resolve-Path -LiteralPath $Iso).Path
+if ($Private) { $Private = (Resolve-Path -LiteralPath $Private).Path }
+$Log = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) $Log))
 Start-Transcript -Path $Log -Force | Out-Null
 try {
   $disk = Get-Disk -Number $DiskNumber
@@ -27,9 +32,9 @@ try {
         -AccessPath "$($_.DriveLetter):" -ErrorAction SilentlyContinue
     }
   }
-  Clear-Disk -Number $DiskNumber -RemoveData -RemoveOEM -Confirm:$false
-  Set-Disk -Number $DiskNumber -IsOffline $true
-  Start-Sleep 2
+  Clear-Disk -Number $DiskNumber -RemoveData -RemoveOEM -Confirm:$false -ErrorAction SilentlyContinue
+  # Removable media cannot be set offline; clearing the partitions is enough to release the volume.
+  Start-Sleep 3
 
   # 2. Raw-write the ISO. archiso images are hybrid, so this alone makes the stick bootable.
   $in  = [System.IO.File]::OpenRead($Iso)
@@ -45,9 +50,8 @@ try {
   Write-Output "Raw write complete: $total bytes"
 
   # 3. Bring the disk back and add a CIDATA partition in the free space.
-  Set-Disk -Number $DiskNumber -IsOffline $false
-  Set-Disk -Number $DiskNumber -IsReadOnly $false
-  Update-Disk -Number $DiskNumber
+  Set-Disk -Number $DiskNumber -IsReadOnly $false -ErrorAction SilentlyContinue
+  Update-Disk -Number $DiskNumber -ErrorAction SilentlyContinue
   Start-Sleep 3
   Get-Partition -DiskNumber $DiskNumber | Format-Table PartitionNumber,Size,Type -AutoSize | Out-String | Write-Output
   $p = New-Partition -DiskNumber $DiskNumber -UseMaximumSize -AssignDriveLetter
