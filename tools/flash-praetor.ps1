@@ -54,10 +54,22 @@ try {
   Update-Disk -Number $DiskNumber -ErrorAction SilentlyContinue
   Start-Sleep 3
   Get-Partition -DiskNumber $DiskNumber | Format-Table PartitionNumber,Size,Type -AutoSize | Out-String | Write-Output
-  $p = New-Partition -DiskNumber $DiskNumber -UseMaximumSize -AssignDriveLetter
+  $p = New-Partition -DiskNumber $DiskNumber -UseMaximumSize
+  # The new volume can take a few seconds to appear after a raw write; retry the format.
+  $formatted = $false
+  for ($i = 0; $i -lt 10 -and -not $formatted; $i++) {
+    Start-Sleep 3
+    try {
+      $p = Get-Partition -DiskNumber $DiskNumber -PartitionNumber $p.PartitionNumber
+      Format-Volume -Partition $p -FileSystem FAT32 -NewFileSystemLabel CIDATA -Confirm:$false | Out-Null
+      $formatted = $true
+    } catch { Write-Output "  waiting for the new volume ($($i+1)/10)..." }
+  }
+  if (-not $formatted) { throw "Could not format the CIDATA partition; format partition $($p.PartitionNumber) on disk $DiskNumber by hand." }
+  $p | Add-PartitionAccessPath -AssignDriveLetter -ErrorAction SilentlyContinue
   Start-Sleep 2
-  Format-Volume -Partition $p -FileSystem FAT32 -NewFileSystemLabel CIDATA -Confirm:$false | Out-Null
   $letter = (Get-Partition -DiskNumber $DiskNumber -PartitionNumber $p.PartitionNumber).DriveLetter
+  if (-not $letter) { throw "CIDATA partition has no drive letter; assign one in Disk Management and copy praetor-private by hand." }
   Write-Output "CIDATA partition: $($letter): $([math]::Round($p.Size/1GB,1)) GB"
 
   # 4. Copy the private layer, if given.
