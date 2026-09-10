@@ -11,16 +11,13 @@ cool-retro-term
 # remote access
 tailscale
 wayvnc
+# computer use: cua-driver installed by overlay/install via `hermes computer-use install`
 # voice pipeline runtime (Python bits come via uv into /opt/praetor/voice)
 python
 python-pip
 portaudio
 pipewire-pulse
 piper-tts
-# computer-use harness
-ydotool
-grim
-slurp
 # toolchains
 go
 bun
