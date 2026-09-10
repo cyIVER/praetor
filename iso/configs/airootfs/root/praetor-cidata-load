@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# Look for a partition labelled CIDATA (any disk, including the install USB).
+# If it holds praetor-private/, stage it in /root/praetor-private.
+# If it also holds archinstall answer files, drop them so the configurator is
+# skipped. No CIDATA => plain interactive install.
+set -uo pipefail
+dev="$(blkid -L CIDATA 2>/dev/null || true)"
+[[ -z "$dev" ]] && { echo "praetor: no CIDATA partition, interactive install"; exit 0; }
+mnt=/run/praetor-cidata; mkdir -p "$mnt"
+mount -o ro "$dev" "$mnt" || { echo "praetor: could not mount $dev"; exit 0; }
+if [[ -d "$mnt/praetor-private" ]]; then
+  cp -r "$mnt/praetor-private" /root/praetor-private
+  echo "praetor: loaded praetor-private from $dev"
+fi
+for f in user_configuration.json user_credentials.json user_full_name.txt \
+         user_email_address.txt user_encrypt_installation.txt; do
+  [[ -f "$mnt/$f" ]] && cp "$mnt/$f" "/root/$f" && echo "praetor: staged $f"
+done
+umount "$mnt"
+exit 0

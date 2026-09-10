@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Network-dependent setup, run once on the first boot after install.
+set -uo pipefail
+state="$HOME/.local/state/praetor"; mkdir -p "$state"
+log="$state/first-boot.log"; exec >>"$log" 2>&1
+echo "== praetor first boot $(date -Is) =="
+
+for _ in $(seq 1 60); do curl -fsI https://archlinux.org >/dev/null 2>&1 && break; sleep 2; done
+
+# Tailscale
+if [[ "$(praetor-config network.tailscale 2>/dev/null)" == "true" ]]; then
+  key=/etc/praetor/secrets/tailscale.authkey
+  host="$(praetor-config network.tailscale_hostname 2>/dev/null || true)"
+  host="${host:-$(hostname)}"
+  if sudo test -r "$key"; then
+    sudo tailscale up --auth-key "$(sudo cat "$key")" --hostname "$host" --ssh
+  else
+    sudo tailscale up --hostname "$host" --ssh
+  fi
+fi
+
+# Hermes Agent (local brain)
+if ! command -v hermes >/dev/null; then
+  curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+fi
+
+# Codex CLI via mise-managed node
+if ! command -v codex >/dev/null; then
+  mise use -g node@24 >/dev/null 2>&1 || true
+  mise exec -- npm install -g @openai/codex || true
+fi
+
+# Antigravity (AUR)
+if [[ "$(praetor-config agents.antigravity 2>/dev/null)" == "true" ]]; then
+  yay -S --noconfirm --needed antigravity-bin || yay -S --noconfirm --needed antigravity || true
+fi
+
+# wayvnc on the Tailscale address only
+if [[ "$(praetor-config remote.wayvnc 2>/dev/null)" == "true" ]]; then
+  mkdir -p "$HOME/.config/wayvnc" "$HOME/.config/systemd/user"
+  ip="$(tailscale ip -4 2>/dev/null | head -1)"
+  printf 'address=%s\nenable_auth=false\n' "${ip:-127.0.0.1}" > "$HOME/.config/wayvnc/config"
+  printf '[Unit]\nDescription=wayvnc (Tailscale only)\nAfter=graphical-session.target\n[Service]\nExecStart=/usr/bin/wayvnc\nRestart=on-failure\n[Install]\nWantedBy=graphical-session.target\n' \
+    > "$HOME/.config/systemd/user/wayvnc.service"
+  systemctl --user enable --now wayvnc.service || true
+fi
+
+touch "$state/first-boot.done"
+notify-send "Praetor" "First-boot setup finished." 2>/dev/null || true

@@ -1,0 +1,26 @@
+[system]
+hostname = "praetor"
+username = "user"
+
+[brain]
+mode = "local"
+
+[network]
+tailscale = false
+
+[remote]
+wayvnc = false
+
+[theme]
+default = "imperium"
+
+[voice]
+enabled = true
+wake_models = ["hey_jarvis"]
+tts = "piper"
+stt_model = "small"
+idle_unload_seconds = 300
+
+[agents]
+scratchpads = ["hermes", "claude", "codex"]
+antigravity = false

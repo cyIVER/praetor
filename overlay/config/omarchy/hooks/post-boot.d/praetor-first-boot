@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Runs after every boot via omarchy-hook post-boot; does its work once.
+state="$HOME/.local/state/praetor"; mkdir -p "$state"
+[[ -f "$state/first-boot.done" ]] && exit 0
+exec "$HOME/.local/bin/praetor-first-boot"

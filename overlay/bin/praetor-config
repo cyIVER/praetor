@@ -1,0 +1,23 @@
+#!/usr/bin/env python3
+"""praetor-config section.key -> prints the value from /etc/praetor/praetor.toml
+Lists print one item per line; booleans print true/false; missing key -> exit 1."""
+import sys
+import tomllib
+
+PATH = "/etc/praetor/praetor.toml"
+try:
+    with open(PATH, "rb") as f:
+        cfg = tomllib.load(f)
+except FileNotFoundError:
+    sys.exit(1)
+node = cfg
+for part in sys.argv[1].split("."):
+    if not isinstance(node, dict) or part not in node:
+        sys.exit(1)
+    node = node[part]
+if isinstance(node, bool):
+    print("true" if node else "false")
+elif isinstance(node, list):
+    print("\n".join(str(x) for x in node))
+else:
+    print(node)

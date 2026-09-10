@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+# Toggle a floating terminal running an agent in the focused window's cwd.
+# usage: praetor-scratchpad <hermes|claude|codex>
+set -euo pipefail
+agent="$1"
+class="org.praetor.$agent"
+case "$agent" in
+  hermes) cmd="hermes" ;;
+  claude) cmd="claude" ;;
+  codex)  cmd="codex" ;;
+  *) echo "unknown agent: $agent" >&2; exit 1 ;;
+esac
+clients="$(hyprctl clients -j)"
+addr="$(jq -r --arg c "$class" '.[] | select(.class == $c) | .address' <<<"$clients" | head -1)"
+if [[ -n "$addr" ]]; then
+  ws="$(jq -r --arg c "$class" '.[] | select(.class == $c) | .workspace.name' <<<"$clients" | head -1)"
+  if [[ "$ws" == "special:praetor-$agent" ]]; then
+    hyprctl dispatch movetoworkspacesilent "+0,address:$addr" >/dev/null
+    hyprctl dispatch focuswindow "address:$addr" >/dev/null
+  else
+    hyprctl dispatch movetoworkspacesilent "special:praetor-$agent,address:$addr" >/dev/null
+  fi
+else
+  dir="$(omarchy-cmd-terminal-cwd 2>/dev/null || echo "$HOME")"
+  setsid uwsm-app -- xdg-terminal-exec --app-id="$class" --dir="$dir" -e "$cmd" >/dev/null 2>&1 &
+fi
