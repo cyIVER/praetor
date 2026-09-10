@@ -9,3 +9,4 @@ iso/work/
 __pycache__/
 .venv/
 node_modules/
+iso/build.log
