@@ -20,11 +20,12 @@ echo "praetor: branding"
 cp "$ov/branding/logo.txt" "$rt/logo.txt"
 cp "$ov/branding/icon.txt" "$rt/icon.txt"
 
-echo "praetor: rasterising theme backgrounds"
+echo "praetor: staging overlay into the live ISO"
+staged="$build_cache_dir/airootfs/root/praetor"
+cp -r "$ov" "$staged"
+
+echo "praetor: rasterising theme backgrounds (in the writable staged copy)"
 pacman -Sy --noconfirm --needed librsvg >/dev/null
-for svg in "$ov"/themes/*/backgrounds/*.svg; do
+for svg in "$staged"/themes/*/backgrounds/*.svg; do
   rsvg-convert -w 2560 -h 1600 "$svg" -o "${svg%.svg}.png"
 done
-
-echo "praetor: staging overlay into the live ISO"
-cp -r "$ov" "$build_cache_dir/airootfs/root/praetor"
