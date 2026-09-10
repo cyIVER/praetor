@@ -12,13 +12,18 @@ git -C "$rt" checkout -q "$runtime_sha"
 echo "praetor: editing package list"
 pk="$rt/install/omarchy-base.packages"
 other="$rt/install/omarchy-other.packages"
-grep -v '^#' "$ov/packages/remove.packages" | grep -v '^$' | tr -d '' | while read -r p; do
-  sed -i -E "/^[[:space:]]*${p}[[:space:]]*?$/d" "$pk" "$other"
+live="$build_cache_dir/packages.x86_64"   # live ISO environment list, seeded from archiso releng
+grep -v '^#' "$ov/packages/remove.packages" | grep -v '^$' | tr -d '
+' | while read -r p; do
+  sed -i -E "/^[[:space:]]*${p}[[:space:]]*
+?$/d" "$pk" "$other" "$live"
 done
-{ echo; echo "# --- praetor core ---"; grep -v '^#' "$ov/packages/core.packages" | grep -v '^$' | tr -d ''; } >> "$pk"
+{ echo; echo "# --- praetor core ---"; grep -v '^#' "$ov/packages/core.packages" | grep -v '^$' | tr -d '
+'; } >> "$pk"
 echo "praetor: verifying removals"
-for p in $(grep -v '^#' "$ov/packages/remove.packages" | grep -v '^$' | tr -d ''); do
-  if grep -qE "^[[:space:]]*${p}[[:space:]]*$" "$pk" "$other"; then echo "praetor: WARNING $p still listed"; fi
+for p in $(grep -v '^#' "$ov/packages/remove.packages" | grep -v '^$' | tr -d '
+'); do
+  if grep -qE "^[[:space:]]*${p}[[:space:]]*$" "$pk" "$other" "$live"; then echo "praetor: WARNING $p still listed"; fi
 done
 
 echo "praetor: branding"
