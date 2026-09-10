@@ -11,8 +11,9 @@ git -C "$rt" checkout -q "$runtime_sha"
 
 echo "praetor: editing package list"
 pk="$rt/install/omarchy-base.packages"
+other="$rt/install/omarchy-other.packages"
 grep -v '^#' "$ov/packages/remove.packages" | grep -v '^$' | while read -r p; do
-  sed -i "/^${p}\$/d" "$pk"
+  sed -i "/^${p}\$/d" "$pk" "$other"
 done
 { echo; echo "# --- praetor core ---"; grep -v '^#' "$ov/packages/core.packages" | grep -v '^$'; } >> "$pk"
 

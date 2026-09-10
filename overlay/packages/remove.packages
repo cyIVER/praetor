@@ -14,3 +14,6 @@ pinta
 dotnet-runtime-9.0
 ruby
 rust
+
+# Not in the repos the ISO builder uses; Broadcom Wi-Fi is not present on the target hardware.
+broadcom-wl

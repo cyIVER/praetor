@@ -17,7 +17,7 @@ python
 python-pip
 portaudio
 pipewire-pulse
-piper-tts
+# piper-tts is AUR-only; the voice stack is installed at first boot (milestone 3)
 # toolchains
 go
 bun
