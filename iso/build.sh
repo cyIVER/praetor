@@ -42,11 +42,17 @@ echo "$OMARCHY_RUNTIME_SHA" > "$clone/builder/praetor-runtime-sha"
 
 flags=()
 [[ "${PRAETOR_DEV:-0}" == "1" ]] && flags+=(--dev)
+# The upstream wrapper ends with a cosmetic `gum` banner that fails on hosts
+# without gum, so judge success by the ISO existing, not by the exit code.
 (
   cd "$clone"
   OMARCHY_INSTALLER_REPO="$OMARCHY_RUNTIME_REPO" \
   OMARCHY_INSTALLER_REF="$OMARCHY_RUNTIME_REF" \
-  ./bin/omarchy-iso-make "${flags[@]}"
+  ./bin/omarchy-iso-make "${flags[@]}" || true
 )
-mv -f "$clone"/release/*.iso "$out"/ 2>/dev/null || true
+iso="$(ls -t "$clone"/release/*.iso 2>/dev/null | head -1 || true)"
+[[ -n "$iso" ]] || { echo "praetor: build failed, no ISO in $clone/release" >&2; exit 1; }
+name="praetor-$(date +%Y.%m.%d)-x86_64.iso"
+mv -f "$iso" "$out/$name"
+( cd "$out" && sha256sum "$name" > "$name.sha256" )
 ls -la "$out"
