@@ -45,13 +45,23 @@ try {
   $out = New-Object System.IO.FileStream("\\.\PhysicalDrive$DiskNumber",
            [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write,
            [System.IO.FileShare]::None, 1MB, [System.IO.FileOptions]::WriteThrough)
-  $buf = New-Object byte[] (4MB); $total = 0; $len = $in.Length; $next = 256MB
+  # Write the first 1 MB (MBR + partition table) LAST. If it goes first, Windows re-reads
+  # the partition table mid-write, mounts any volume whose data already exists on the stick
+  # (e.g. the EFI partition from a previous flash), and then denies writes to that range.
+  $head = 1MB
+  $headBuf = New-Object byte[] $head
+  $headLen = $in.Read($headBuf, 0, $head)
+  $buf = New-Object byte[] (4MB); $total = $headLen; $len = $in.Length; $next = 256MB
+  $out.Seek($head, [System.IO.SeekOrigin]::Begin) | Out-Null
   while (($n = $in.Read($buf, 0, $buf.Length)) -gt 0) {
     $out.Write($buf, 0, $n); $total += $n
     if ($total -ge $next) { Write-Output ("  written {0:N0} / {1:N0} MB" -f ($total/1MB), ($len/1MB)); $next += 256MB }
   }
+  $out.Flush()
+  $out.Seek(0, [System.IO.SeekOrigin]::Begin) | Out-Null
+  $out.Write($headBuf, 0, $headLen)
   $out.Flush(); $out.Dispose(); $in.Dispose()
-  Write-Output "Raw write complete: $total bytes"
+  Write-Output "Raw write complete: $total bytes (MBR written last)"
   if ($NoCidata) { Write-Output "Skipping CIDATA partition (-NoCidata)."; Write-Output "FLASH_OK"; return }
 
   # 3. Bring the disk back and add a CIDATA partition in the free space.
