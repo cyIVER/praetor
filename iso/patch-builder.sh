@@ -19,6 +19,19 @@ print(f"  patched: {desc}")
 PY
 }
 
+replace() { # replace <file> <desc> <key> <text>
+  python3 - "$clone/$1" "$2" "$3" "$4" <<'PY2'
+import sys
+path, desc, key, new = sys.argv[1:5]
+s = open(path).read()
+n = s.count(key)
+if n != 1:
+    sys.exit(f"patch-builder: key for '{desc}' found {n} times in {path}")
+open(path, "w").write(s.replace(key, new))
+print(f"  patched: {desc}")
+PY2
+}
+
 # 1. build-iso.sh — call the runtime patch after the clone block ends.
 python3 - "$clone/builder/build-iso.sh" <<'PY'
 import sys
@@ -33,10 +46,13 @@ print("  patched: runtime patch call")
 PY
 
 # 2. .automated_script.sh — cidata before the configurator, post-install before reboot.
-insert configs/airootfs/root/.automated_script.sh "cidata load" \
-  './configurator' \
-  '/root/praetor-cidata-load
-  ' before
+replace configs/airootfs/root/.automated_script.sh "cidata load"   '  set_tokyo_night_colors
+  ./configurator
+'   '  set_tokyo_night_colors
+  /root/praetor-cidata-load
+  # CIDATA may have supplied the answer files; only prompt if it did not.
+  [[ -f user_credentials.json && -f user_configuration.json ]] || ./configurator
+'
 insert configs/airootfs/root/.automated_script.sh "post-install" \
   '  if [[ -f /mnt/var/tmp/omarchy-install-completed ]]; then' \
   '  /root/praetor-post-install "$OMARCHY_USER"
