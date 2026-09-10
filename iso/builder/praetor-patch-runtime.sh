@@ -12,10 +12,14 @@ git -C "$rt" checkout -q "$runtime_sha"
 echo "praetor: editing package list"
 pk="$rt/install/omarchy-base.packages"
 other="$rt/install/omarchy-other.packages"
-grep -v '^#' "$ov/packages/remove.packages" | grep -v '^$' | while read -r p; do
-  sed -i "/^${p}\$/d" "$pk" "$other"
+grep -v '^#' "$ov/packages/remove.packages" | grep -v '^$' | tr -d '' | while read -r p; do
+  sed -i -E "/^[[:space:]]*${p}[[:space:]]*?$/d" "$pk" "$other"
 done
-{ echo; echo "# --- praetor core ---"; grep -v '^#' "$ov/packages/core.packages" | grep -v '^$'; } >> "$pk"
+{ echo; echo "# --- praetor core ---"; grep -v '^#' "$ov/packages/core.packages" | grep -v '^$' | tr -d ''; } >> "$pk"
+echo "praetor: verifying removals"
+for p in $(grep -v '^#' "$ov/packages/remove.packages" | grep -v '^$' | tr -d ''); do
+  if grep -qE "^[[:space:]]*${p}[[:space:]]*$" "$pk" "$other"; then echo "praetor: WARNING $p still listed"; fi
+done
 
 echo "praetor: branding"
 cp "$ov/branding/logo.txt" "$rt/logo.txt"
