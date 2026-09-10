@@ -1,0 +1,16 @@
+# Omarchy base packages Praetor removes to hit the efficiency budget.
+# Each is available again via the Praetor menu: Install > Extras.
+chromium
+1password-beta
+1password-cli
+kdenlive
+libreoffice-fresh
+obs-studio
+signal-desktop
+spotify
+typora
+xournalpp
+pinta
+dotnet-runtime-9.0
+ruby
+rust

@@ -1,0 +1,29 @@
+# Praetor core — installed on top of Omarchy's base list.
+# Praetor also REMOVES the packages listed in remove.packages.
+# One package per line; comments and blank lines ignored.
+
+# browser / media
+firefox
+# terminal flair (opt-in toys, installed but not default)
+cava
+cmatrix
+cool-retro-term
+# remote access
+tailscale
+wayvnc
+# voice pipeline runtime (Python bits come via uv into /opt/praetor/voice)
+python
+python-pip
+portaudio
+pipewire-pulse
+piper-tts
+# computer-use harness
+ydotool
+grim
+slurp
+# toolchains
+go
+bun
+uv
+# agents (hermes-agent and codex installed by overlay/install scripts)
+claude-code
