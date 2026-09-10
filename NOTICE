@@ -1,0 +1,14 @@
+Praetor is built on top of, and includes code derived from:
+
+- Omarchy — Copyright (c) David Heinemeier Hansson — MIT License
+  https://github.com/basecamp/omarchy
+- Omarchy ISO builder — MIT License
+  https://github.com/omacom-io/omarchy-iso
+- Hermes Agent — Copyright (c) Nous Research — MIT License
+  https://github.com/NousResearch/hermes-agent
+
+The ISO is assembled with archiso (GPL-3.0), used as a build tool only.
+
+"Omarchy" is the name and brand of its authors and is not used to identify
+Praetor. Praetor is an independent project and is not affiliated with or
+endorsed by Basecamp, DHH, or Nous Research.

@@ -1,0 +1,11 @@
+# build output
+iso/out/
+iso/work/
+*.iso
+*.iso.sha256
+# local
+.env
+*.local
+__pycache__/
+.venv/
+node_modules/
