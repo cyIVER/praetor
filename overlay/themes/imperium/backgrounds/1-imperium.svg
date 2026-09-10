@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="2560" height="1600" viewBox="0 0 2560 1600">
+  <defs>
+    <radialGradient id="g" cx="50%" cy="58%" r="70%">
+      <stop offset="0%" stop-color="#1A1216"/>
+      <stop offset="55%" stop-color="#0E0C10"/>
+      <stop offset="100%" stop-color="#0B0A0C"/>
+    </radialGradient>
+    <linearGradient id="gold" x1="0" x2="1">
+      <stop offset="0%" stop-color="#C9A227" stop-opacity="0"/>
+      <stop offset="50%" stop-color="#C9A227" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#C9A227" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <rect width="2560" height="1600" fill="url(#g)"/>
+  <!-- laurel ring -->
+  <circle cx="1280" cy="800" r="420" fill="none" stroke="#C9A227" stroke-opacity="0.10" stroke-width="2"/>
+  <circle cx="1280" cy="800" r="470" fill="none" stroke="#C9A227" stroke-opacity="0.05" stroke-width="1"/>
+  <!-- crimson stripe -->
+  <rect x="0" y="1180" width="2560" height="6" fill="#B3122E" fill-opacity="0.55"/>
+  <rect x="0" y="1194" width="2560" height="1" fill="url(#gold)"/>
+  <!-- SPQR-style mark -->
+  <text x="1280" y="830" text-anchor="middle" font-family="Cinzel, 'Times New Roman', serif" font-size="140" letter-spacing="28" fill="#E6DFD3" fill-opacity="0.92">PRAETOR</text>
+  <text x="1280" y="900" text-anchor="middle" font-family="Cinzel, 'Times New Roman', serif" font-size="34" letter-spacing="14" fill="#C9A227" fill-opacity="0.8">IMPERIUM · SINE · MORA</text>
+</svg>
