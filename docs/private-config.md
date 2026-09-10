@@ -55,5 +55,5 @@ antigravity = false             # install Antigravity from AUR
 ```
 
 Secrets never go in `praetor.toml`. The installer copies `secrets/` to
-`/etc/praetor/secrets/` with mode 0600, owned by root, and deletes the media
-copy is *not* touched (you own the stick).
+`/etc/praetor/secrets/` with mode 0600, owned by root. The copy on the USB stick is left untouched;
+wipe the stick yourself when you are done.
