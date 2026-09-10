@@ -1,0 +1,73 @@
+# Flash the Praetor ISO to a USB disk and add a CIDATA partition (Windows).
+# RUN IN AN ELEVATED POWERSHELL. This erases the target disk.
+#
+#   .\tools\flash-praetor.ps1 -DiskNumber 1 -Iso .\iso\out\praetor-2026.09.10.iso `
+#       -Private C:\path\to\praetor-private -Log .\iso\flash.log
+#
+# Find the disk number with: Get-Disk | Format-Table Number,FriendlyName,BusType,Size
+param(
+  [Parameter(Mandatory)][int]$DiskNumber,
+  [Parameter(Mandatory)][string]$Iso,
+  [string]$Private = "",
+  [string]$Log = "$PSScriptRoot\..\iso\flash.log"
+)
+$ErrorActionPreference = 'Stop'
+Start-Transcript -Path $Log -Force | Out-Null
+try {
+  $disk = Get-Disk -Number $DiskNumber
+  if ($disk.BusType -ne 'USB') { throw "Disk $DiskNumber is not USB ($($disk.BusType)); refusing." }
+  if ($disk.IsBoot -or $disk.IsSystem) { throw "Disk $DiskNumber is a boot/system disk; refusing." }
+  Write-Output "Target: disk $DiskNumber $($disk.FriendlyName) $([math]::Round($disk.Size/1GB,1)) GB"
+  Write-Output "ISO: $Iso ($([math]::Round((Get-Item $Iso).Length/1MB)) MB)"
+
+  # 1. Detach volumes and wipe the partition table.
+  Get-Partition -DiskNumber $DiskNumber -ErrorAction SilentlyContinue | ForEach-Object {
+    if ($_.DriveLetter) {
+      Remove-PartitionAccessPath -DiskNumber $DiskNumber -PartitionNumber $_.PartitionNumber `
+        -AccessPath "$($_.DriveLetter):" -ErrorAction SilentlyContinue
+    }
+  }
+  Clear-Disk -Number $DiskNumber -RemoveData -RemoveOEM -Confirm:$false
+  Set-Disk -Number $DiskNumber -IsOffline $true
+  Start-Sleep 2
+
+  # 2. Raw-write the ISO. archiso images are hybrid, so this alone makes the stick bootable.
+  $in  = [System.IO.File]::OpenRead($Iso)
+  $out = New-Object System.IO.FileStream("\\.\PhysicalDrive$DiskNumber",
+           [System.IO.FileMode]::Open, [System.IO.FileAccess]::Write,
+           [System.IO.FileShare]::None, 1MB, [System.IO.FileOptions]::WriteThrough)
+  $buf = New-Object byte[] (4MB); $total = 0; $len = $in.Length; $next = 256MB
+  while (($n = $in.Read($buf, 0, $buf.Length)) -gt 0) {
+    $out.Write($buf, 0, $n); $total += $n
+    if ($total -ge $next) { Write-Output ("  written {0:N0} / {1:N0} MB" -f ($total/1MB), ($len/1MB)); $next += 256MB }
+  }
+  $out.Flush(); $out.Dispose(); $in.Dispose()
+  Write-Output "Raw write complete: $total bytes"
+
+  # 3. Bring the disk back and add a CIDATA partition in the free space.
+  Set-Disk -Number $DiskNumber -IsOffline $false
+  Set-Disk -Number $DiskNumber -IsReadOnly $false
+  Update-Disk -Number $DiskNumber
+  Start-Sleep 3
+  Get-Partition -DiskNumber $DiskNumber | Format-Table PartitionNumber,Size,Type -AutoSize | Out-String | Write-Output
+  $p = New-Partition -DiskNumber $DiskNumber -UseMaximumSize -AssignDriveLetter
+  Start-Sleep 2
+  Format-Volume -Partition $p -FileSystem FAT32 -NewFileSystemLabel CIDATA -Confirm:$false | Out-Null
+  $letter = (Get-Partition -DiskNumber $DiskNumber -PartitionNumber $p.PartitionNumber).DriveLetter
+  Write-Output "CIDATA partition: $($letter): $([math]::Round($p.Size/1GB,1)) GB"
+
+  # 4. Copy the private layer, if given.
+  if ($Private) {
+    $dest = "$($letter):\praetor-private"
+    New-Item -ItemType Directory -Path $dest -Force | Out-Null
+    robocopy $Private $dest /E /XD .git /XF .gitignore /NFL /NDL /NJH /NJS | Out-Null
+    Write-Output "Copied private layer to $dest"
+    Get-ChildItem -Recurse $dest | Select-Object FullName | Out-String | Write-Output
+  }
+  Write-Output "FLASH_OK"
+} catch {
+  Write-Output "FLASH_FAILED: $($_.Exception.Message)"
+  Write-Output $_.ScriptStackTrace
+} finally {
+  Stop-Transcript | Out-Null
+}
