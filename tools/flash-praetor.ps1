@@ -9,7 +9,11 @@ param(
   [Parameter(Mandatory)][int]$DiskNumber,
   [Parameter(Mandatory)][string]$Iso,
   [string]$Private = "",
-  [string]$Log = "$PSScriptRoot\..\iso\flash.log"
+  [string]$Log = "$PSScriptRoot\..\iso\flash.log",
+  # Windows' volume manager often refuses to create volumes on an isohybrid disk, so the
+  # CIDATA step may fail on some machines. Use -NoCidata with a *-personal.iso (private
+  # layer baked in) or put praetor-private on a separate CIDATA-labelled stick.
+  [switch]$NoCidata
 )
 $ErrorActionPreference = 'Stop'
 # .NET file APIs resolve relative paths against the process cwd (System32 when elevated),
@@ -48,6 +52,7 @@ try {
   }
   $out.Flush(); $out.Dispose(); $in.Dispose()
   Write-Output "Raw write complete: $total bytes"
+  if ($NoCidata) { Write-Output "Skipping CIDATA partition (-NoCidata)."; Write-Output "FLASH_OK"; return }
 
   # 3. Bring the disk back and add a CIDATA partition in the free space.
   Set-Disk -Number $DiskNumber -IsReadOnly $false -ErrorAction SilentlyContinue
