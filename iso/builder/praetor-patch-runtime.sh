@@ -29,6 +29,11 @@ cp "$ov/branding/icon.txt" "$rt/icon.txt"
 echo "praetor: staging overlay into the live ISO"
 staged="$build_cache_dir/airootfs/root/praetor"
 cp -r "$ov" "$staged"
+if [[ -d /builder/praetor-private ]]; then
+  echo "praetor: baking private layer into the live ISO (personal build)"
+  cp -r /builder/praetor-private "$build_cache_dir/airootfs/root/praetor-private"
+  chmod -R go-rwx "$build_cache_dir/airootfs/root/praetor-private"
+fi
 
 echo "praetor: rasterising theme backgrounds (in the writable staged copy)"
 pacman -Sy --noconfirm --needed librsvg >/dev/null

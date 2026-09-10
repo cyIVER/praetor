@@ -37,6 +37,17 @@ chmod +x "$clone/builder/praetor-patch-runtime.sh" \
 cp -r "$repo_root/overlay" "$clone/builder/praetor-overlay"
 echo "$OMARCHY_RUNTIME_SHA" > "$clone/builder/praetor-runtime-sha"
 
+# Optional: bake a private layer into the ISO (PERSONAL BUILDS ONLY, never share the result).
+# The public flow delivers the same folder via a CIDATA partition instead.
+suffix=""
+if [[ -n "${PRAETOR_PRIVATE_DIR:-}" ]]; then
+  [[ -d "$PRAETOR_PRIVATE_DIR" ]] || { echo "PRAETOR_PRIVATE_DIR not found: $PRAETOR_PRIVATE_DIR" >&2; exit 1; }
+  mkdir -p "$clone/builder/praetor-private"
+  ( cd "$PRAETOR_PRIVATE_DIR" && tar --exclude=.git --exclude=.gitignore -cf - . ) | tar -xf - -C "$clone/builder/praetor-private"
+  suffix="-personal"
+  echo "praetor: private layer staged from $PRAETOR_PRIVATE_DIR (ISO will be named *-personal)"
+fi
+
 # Edit the upstream scripts in place.
 "$here/patch-builder.sh" "$clone"
 
@@ -52,7 +63,7 @@ flags=()
 )
 iso="$(ls -t "$clone"/release/*.iso 2>/dev/null | head -1 || true)"
 [[ -n "$iso" ]] || { echo "praetor: build failed, no ISO in $clone/release" >&2; exit 1; }
-name="praetor-$(date +%Y.%m.%d)-x86_64.iso"
+name="praetor-$(date +%Y.%m.%d)-x86_64${suffix}.iso"
 mv -f "$iso" "$out/$name"
 ( cd "$out" && sha256sum "$name" > "$name.sha256" )
 ls -la "$out"
