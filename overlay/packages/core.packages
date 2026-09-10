@@ -2,6 +2,9 @@
 # Praetor also REMOVES the packages listed in remove.packages.
 # One package per line; comments and blank lines ignored.
 
+# theme backgrounds ship as SVG and are rasterised at install time
+librsvg
+
 # browser / media
 firefox
 # terminal flair (opt-in toys, installed but not default)

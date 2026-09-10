@@ -1,0 +1,32 @@
+#!/usr/bin/env bash
+# Root half of first boot, run once by praetor-first-boot-root.service.
+# Only work that must be root AND must succeed with nobody at the keyboard:
+# the machine has to reach the tailnet on its own (unencrypted disk, remote
+# reboots). Everything interactive stays in the user-side praetor-first-boot.
+set -uo pipefail
+state=/var/lib/praetor
+mkdir -p "$state"
+log=$state/first-boot-root.log
+exec >>"$log" 2>&1
+echo "== praetor first boot (root) $(date -Is) =="
+
+cfg() { /usr/local/lib/praetor/praetor-config "$1" 2>/dev/null; }
+
+if [[ "$(cfg network.tailscale)" == "true" ]]; then
+  key=/etc/praetor/secrets/tailscale.authkey
+  host="$(cfg network.tailscale_hostname)"
+  host="${host:-$(hostname)}"
+  if [[ -r $key ]]; then
+    tailscale up --auth-key "$(cat "$key")" --hostname "$host" --ssh
+  else
+    echo "no auth key at $key; leaving tailscale logged out for the user to run 'tailscale up'"
+  fi
+fi
+
+# Hermes Agent installs system-wide under /usr/local; no tty needed.
+if ! command -v hermes >/dev/null; then
+  curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash
+fi
+
+touch "$state/first-boot-root.done"
+echo "== done $(date -Is) =="

@@ -1,5 +1,28 @@
 #!/usr/bin/env bash
-# Runs after every boot via omarchy-hook post-boot; does its work once.
-state="$HOME/.local/state/praetor"; mkdir -p "$state"
-[[ -f "$state/first-boot.done" ]] && exit 0
-exec "$HOME/.local/bin/praetor-first-boot"
+# Runs after every boot via omarchy-hook post-boot. Two jobs: land the configured
+# theme on the first live session, then run first-boot setup once.
+set -uo pipefail
+state="$HOME/.local/state/praetor"
+mkdir -p "$state"
+
+# Applied once, not enforced: a theme the operator picks later must stick.
+wanted="$(cat "$state/theme.wanted" 2>/dev/null || true)"
+if [[ -n $wanted && ! -f $state/theme.applied && -d $HOME/.config/omarchy/themes/$wanted ]]; then
+  omarchy-theme-set "$wanted" && touch "$state/theme.applied"
+fi
+
+[[ -f $state/first-boot.done ]] && exit 0
+
+# First boot needs a password for sudo and for yay, and a hook has no tty. Run it
+# in a visible terminal so the operator can answer, in keeping with supervised
+# defaults. `bash`, never `exec`: a lost exec bit must not disable first boot.
+root="${PRAETOR_PATH:-$(cat "$state/path" 2>/dev/null)}"
+fb="${root:-$HOME/.local/share/praetor}/bin/praetor-first-boot"
+[[ -x $fb ]] || chmod +x "$fb" 2>/dev/null
+if command -v uwsm-app >/dev/null && command -v xdg-terminal-exec >/dev/null; then
+  setsid uwsm-app -- xdg-terminal-exec --app-id=org.praetor.first-boot \
+    -e bash -lc "bash '$fb'; echo; read -rp 'first boot done — enter to close '" \
+    >/dev/null 2>&1 &
+else
+  bash "$fb"
+fi

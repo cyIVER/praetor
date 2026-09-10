@@ -59,3 +59,38 @@ Pins live at the top of `build.sh`. Bump them deliberately.
 - Removing packages from Omarchy's base list is only safe for apps its install scripts never
   touch. Removing `chromium` halts `install/config/theme-system.sh` (it writes Chromium's
   `initial_preferences`) and breaks webapps. See the comments in `overlay/packages/remove.packages`.
+
+## First-install findings (Flex 5, 2026-09-10)
+
+The first installed ISO staged the overlay correctly but nothing Praetor-specific
+was visible on login. Four bugs, all fixed in this commit:
+
+- **No exec bit in the repo.** Every file was `100644`, so `overlay/bin/*` landed
+  non-executable, and the post-boot hook's `exec ~/.local/bin/praetor-first-boot`
+  died with 126. The ISO pipeline hid this because it runs everything as
+  `bash <file>` and `profiledef.sh` forces `0755` on the two `/root/praetor-*`
+  scripts. Scripts are `100755` in git now; `install/user/10-bin.sh` chmods
+  defensively, and `praetor-patch-runtime.sh` restores the bits and *fails the
+  build* if they are missing — a DrvFs/NTFS checkout on the build host loses them.
+- **Stage ordering.** `praetor-post-install` ran `all.sh` before `root.sh`, so the
+  user stages read `/etc/praetor/praetor.toml` before `root/10-config.sh` wrote it.
+  Root stages run first now.
+- **Theme could never apply in the chroot.** `omarchy-theme-set` is not on `PATH`
+  there and restarts waybar/mako/hyprctl, and `|| true` hid the failure.
+  `20-theme.sh` now records the wanted theme in
+  `~/.local/state/praetor/theme.wanted`; the post-boot hook applies it on the
+  first live session and marks `theme.applied` so a later operator choice sticks.
+- **`praetor-first-boot` needed a tty.** `sudo` and `yay` prompt for a password
+  (no NOPASSWD drop-in on an Omarchy install) and the hook has no terminal. Split:
+  `praetor-first-boot-root` runs unattended as a systemd oneshot
+  (`praetor-first-boot-root.service`) for Tailscale join and the Hermes install —
+  the machine must reach the tailnet with nobody at the keyboard — and the user
+  half now opens in a terminal window so prompts are answerable.
+
+Also: theme backgrounds are SVG in the repo and were rasterised only by the ISO
+builder, so `git clone && install/all.sh` left hyprpaper with an SVG it cannot
+render. `20-theme.sh` rasterises missing PNGs itself (`librsvg` is in
+`core.packages`); the generated PNGs are gitignored.
+
+The theme `hyprland.conf` files used pre-0.5x `layerrule = blur, <ns>` syntax,
+which Hyprland 0.56 rejects. Now `layerrule = blur on, match:namespace <ns>`.

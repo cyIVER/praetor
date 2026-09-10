@@ -4,11 +4,16 @@
 set -euo pipefail
 user="$1"; home="/mnt/home/$user"
 echo "praetor: post-install for $user"
+mkdir -p "$home/.local/share"
 cp -r /root/praetor "$home/.local/share/praetor"
-[[ -d /root/praetor-private ]] && cp -r /root/praetor-private "$home/.local/share/praetor-private"
+# `&&` as the last command of a line is fatal under set -e when the test fails:
+# a public (non-personal) ISO has no private layer and must not abort here.
+if [[ -d /root/praetor-private ]]; then
+  cp -r /root/praetor-private "$home/.local/share/praetor-private"
+fi
 arch-chroot /mnt chown -R "$user:$user" "/home/$user/.local/share"
-arch-chroot -u "$user" /mnt env PRAETOR_CHROOT_INSTALL=1 HOME="/home/$user" \
-  bash -lc "bash /home/$user/.local/share/praetor/install/all.sh"
 arch-chroot /mnt env PRAETOR_CHROOT_INSTALL=1 PRAETOR_USER="$user" \
   bash -c "bash /home/$user/.local/share/praetor/install/root.sh"
+arch-chroot -u "$user" /mnt env PRAETOR_CHROOT_INSTALL=1 HOME="/home/$user" \
+  bash -lc "bash /home/$user/.local/share/praetor/install/all.sh"
 echo "praetor: post-install done"

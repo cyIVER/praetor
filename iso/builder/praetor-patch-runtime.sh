@@ -35,6 +35,16 @@ if [[ -d /builder/praetor-private ]]; then
   chmod -R go-rwx "$build_cache_dir/airootfs/root/praetor-private"
 fi
 
+echo "praetor: restoring exec bits on the staged overlay"
+# The build host may be a DrvFs/NTFS checkout (WSL), where git's exec bit does not
+# survive. The overlay's bins are symlinked into ~/.local/bin and run directly, so
+# a 0644 here silently disables every praetor command on the installed system.
+chmod +x "$staged"/bin/praetor-* "$staged"/install/*.sh "$staged"/install/*/*.sh \
+  "$staged"/config/omarchy/hooks/post-boot.d/*
+for f in "$staged"/bin/praetor-* "$staged"/install/all.sh "$staged"/install/root.sh; do
+  [[ -x $f ]] || { echo "praetor: FATAL $f is not executable"; exit 1; }
+done
+
 echo "praetor: rasterising theme backgrounds (in the writable staged copy)"
 pacman -Sy --noconfirm --needed librsvg >/dev/null
 for svg in "$staged"/themes/*/backgrounds/*.svg; do
