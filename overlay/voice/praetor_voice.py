@@ -169,6 +169,7 @@ class Listener:
             with self.q.mutex:
                 self.q.queue.clear()
             audio = self.record_utterance()
+            log(f"captured {len(audio) / RATE:.1f}s")
             if len(audio) < RATE * 0.5:
                 log("too short"); return
             text = self.speech.transcribe(audio)
@@ -193,16 +194,20 @@ class Listener:
                 if self.ptt.is_set():
                     self.ptt.clear()
                     threading.Thread(target=self.handle, args=("push-to-talk",), daemon=True).start()
+                if self.busy.locked():
+                    # A handler owns the microphone queue while it records; do not drain it here.
+                    time.sleep(0.05); continue
                 try:
                     frame = self.q.get(timeout=0.5)
                 except queue.Empty:
                     self.speech.maybe_unload(); continue
-                if self.busy.locked():
-                    continue
                 scores = self.oww.predict(frame)
-                if any(v >= self.threshold for v in scores.values()):
+                best = max(scores.values()) if scores else 0.0
+                if best >= self.threshold:
                     self.oww.reset()
                     threading.Thread(target=self.handle, args=("wake word",), daemon=True).start()
+                elif best >= 0.2:
+                    log(f"wake near-miss score {best:.2f} (threshold {self.threshold})")
                 self.speech.maybe_unload()
 
 
