@@ -112,6 +112,11 @@ class Speech:
 
     def say(self, text: str) -> None:
         self._touch()
+        if cfg("voice.tts", "piper") == "kokoro":
+            try:
+                return self._say_kokoro(text)
+            except Exception as e:
+                log(f"kokoro failed ({repr(e)}), falling back to piper")
         if not self.tts_voice.exists():
             log(f"piper voice missing: {self.tts_voice}"); return
         piper = str(Path(sys.executable).parent / "piper")
@@ -121,9 +126,24 @@ class Speech:
                                 stdin=p.stdout, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         p.stdin.write(text.encode()); p.stdin.close(); play.wait()
 
+    def _say_kokoro(self, text: str) -> None:
+        """Kokoro (82M, CPU) via kokoro-onnx: far more natural than Piper, ~500 MB when loaded."""
+        if getattr(self, "kokoro", None) is None:
+            from kokoro_onnx import Kokoro
+            log("loading kokoro")
+            self.kokoro = Kokoro(str(MODELS / "kokoro-v1.0.onnx"), str(MODELS / "voices-v1.0.bin"))
+        voice = cfg("voice.kokoro_voice", "bm_george")
+        lang = "en-gb" if voice.startswith("b") else "en-us"
+        samples, rate = self.kokoro.create(text, voice=voice, speed=float(cfg("voice.kokoro_speed", 1.0)), lang=lang)
+        play = subprocess.Popen(["pw-play", "--rate", str(rate), "--format", "f32", "--channels", "1", "--raw", "-"],
+                                stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        play.stdin.write(samples.astype("float32").tobytes()); play.stdin.close(); play.wait()
+
     def maybe_unload(self):
         if self.stt is not None and time.time() - self.last_used > self.idle:
             log("unloading STT after idle"); self.stt = None
+        if getattr(self, "kokoro", None) is not None and time.time() - self.last_used > self.idle:
+            log("unloading kokoro after idle"); self.kokoro = None
 
 
 class Mic:

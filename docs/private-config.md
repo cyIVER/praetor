@@ -47,7 +47,9 @@ default = "imperium"            # "imperium" | "obsidian" | any theme dir name
 [voice]
 enabled     = true
 wake_models = ["hey_jarvis"]    # openWakeWord model names or paths
-tts         = "piper"           # "piper" | "kokoro"
+tts         = "piper"           # "piper" (50 MB, robotic) | "kokoro" (500 MB loaded, natural; unloads when idle)
+kokoro_voice = "bm_george"      # kokoro voices: af_heart, af_bella, am_michael, bm_george, bm_lewis, ...
+kokoro_speed = 1.0
 stt_model   = "small"           # faster-whisper size: tiny|base|small
 idle_unload_seconds = 300
 brain       = "local"           # "local" = hermes chat -q on this machine; "remote" = JARVIS voice relay

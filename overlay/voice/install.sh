@@ -28,6 +28,14 @@ if [[ ! -f "$models/$voice.onnx" ]]; then
   curl -fsSL -o "$models/$voice.onnx" "$base_url/$voice.onnx"
   curl -fsSL -o "$models/$voice.onnx.json" "$base_url/$voice.onnx.json"
 fi
+# Kokoro TTS (opt-in via [voice] tts = "kokoro"): model ~310 MB + voices ~27 MB from the kokoro-onnx releases.
+if grep -qE '^tts\s*=\s*"kokoro"' /etc/praetor/praetor.toml 2>/dev/null; then
+  uv pip install --python "$venv/bin/python" -q "kokoro-onnx>=0.4"
+  kk="https://github.com/thewh1teagle/kokoro-onnx/releases/download/model-files-v1.0"
+  [[ -f "$models/kokoro-v1.0.onnx" ]] || curl -fsSL -o "$models/kokoro-v1.0.onnx" "$kk/kokoro-v1.0.onnx"
+  [[ -f "$models/voices-v1.0.bin" ]] || curl -fsSL -o "$models/voices-v1.0.bin" "$kk/voices-v1.0.bin"
+  echo "kokoro ready"
+fi
 # Short chimes so you know it is listening / done.
 "$venv/bin/python" - "$models" <<'PY'
 import sys, wave, math, struct
