@@ -133,7 +133,7 @@ class Mic:
     def __init__(self, q: queue.Queue, np):
         self.q, self.np = q, np
         self.proc = subprocess.Popen(
-            ["pw-record", "--rate", str(RATE), "--channels", "1", "--format", "s16", "-"],
+            ["pw-record", "--raw", "--rate", str(RATE), "--channels", "1", "--format", "s16", "-"],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
         threading.Thread(target=self._pump, daemon=True).start()
 
@@ -144,7 +144,7 @@ class Mic:
             if not buf:
                 log("pw-record ended; restarting capture in 2s"); time.sleep(2)
                 self.proc = subprocess.Popen(
-                    ["pw-record", "--rate", str(RATE), "--channels", "1", "--format", "s16", "-"],
+                    ["pw-record", "--raw", "--rate", str(RATE), "--channels", "1", "--format", "s16", "-"],
                     stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
                 continue
             while len(buf) < need:
