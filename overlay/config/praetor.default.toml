@@ -10,6 +10,7 @@ tailscale = false
 
 [remote]
 wayvnc = false
+always_on = false
 
 [theme]
 default = "imperium"
