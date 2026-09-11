@@ -33,7 +33,7 @@ if [[ "$(praetor-config remote.wayvnc 2>/dev/null)" == "true" ]]; then
   mkdir -p "$HOME/.config/wayvnc" "$HOME/.config/systemd/user"
   ip="$(tailscale ip -4 2>/dev/null | head -1)"
   printf 'address=%s\nenable_auth=false\n' "${ip:-127.0.0.1}" > "$HOME/.config/wayvnc/config"
-  printf '[Unit]\nDescription=wayvnc (Tailscale only)\nAfter=graphical-session.target\n[Service]\nExecStart=/usr/bin/wayvnc\nRestart=on-failure\n[Install]\nWantedBy=graphical-session.target\n' \
+  printf '[Unit]\nDescription=wayvnc (Tailscale only)\nAfter=graphical-session.target\n[Service]\nExecStart=/usr/bin/wayvnc --render-cursor\nRestart=on-failure\n[Install]\nWantedBy=graphical-session.target\n' \
     > "$HOME/.config/systemd/user/wayvnc.service"
   systemctl --user daemon-reload
   systemctl --user enable --now wayvnc.service || true
