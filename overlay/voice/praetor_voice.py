@@ -53,6 +53,7 @@ class Brain:
         self.token = tokf.read_text().strip() if tokf.exists() else ""
 
     def ask(self, text: str) -> str:
+        self.cancelled = False
         if self.mode == "remote" and self.url and self.token:
             return self._remote(text)
         return self._local(text)
@@ -80,13 +81,37 @@ class Brain:
         return reply.strip() or "I got no answer from mission control."
 
     def _local(self, text: str) -> str:
-        # -Q: quiet/programmatic output (no banner, box art, or session footer).
-        out = subprocess.run(["hermes", "chat", "-Q", "--oneshot", "-q", text],
-                             capture_output=True, text=True, timeout=300)
-        reply = (out.stdout or "").strip()
+        # -Q: quiet/programmatic output. It still prints a "session_id: ..." line first; drop it.
+        # Voice favours latency: reasoning effort is configurable and defaults to none.
+        cmd = ["hermes", "chat", "-Q", "--oneshot", "--reasoning", cfg("voice.reasoning", "none")]
+        toolsets = cfg("voice.toolsets", "")
+        if toolsets:
+            cmd += ["-t", toolsets]
+        prefix = cfg("voice.prompt_prefix", (
+            "Voice mode on a Linux laptop (Hyprland). Answer in one to three short spoken sentences, plain "
+            "text, no markdown or lists. If the user asks you to open or show something, do it with a shell "
+            "command such as `uwsm-app -- firefox URL` or `uwsm-app -- APP`, then say what you opened. "
+            "User said: "))
+        self.proc = subprocess.Popen(cmd + ["-q", prefix + text], stdout=subprocess.PIPE,
+                                     stderr=subprocess.PIPE, text=True)
+        try:
+            out, err = self.proc.communicate(timeout=300)
+        except subprocess.TimeoutExpired:
+            self.proc.kill(); return "Hermes took too long."
+        if self.cancelled:
+            return ""
+        lines = [l for l in (out or "").splitlines() if l.strip() and not l.startswith("session_id:")]
+        reply = "\n".join(lines).strip()
         if not reply:
-            reply = (out.stderr or "").strip()[-500:]
+            reply = (err or "").strip()[-500:]
         return reply[-2000:] or "Hermes returned nothing."
+
+    def cancel(self) -> None:
+        """Barge-in while thinking: kill the in-flight Hermes call."""
+        self.cancelled = True
+        p = getattr(self, "proc", None)
+        if p is not None and p.poll() is None:
+            p.kill()
 
 
 class Speech:
@@ -110,13 +135,24 @@ class Speech:
         segments, _ = self.stt.transcribe(audio, language="en", beam_size=1, vad_filter=True)
         return " ".join(s.text.strip() for s in segments).strip()
 
-    def say(self, text: str) -> None:
+    def say(self, text: str, cancel: threading.Event | None = None) -> None:
+        """Speak text sentence by sentence: synthesise sentence n+1 while sentence n plays, so the
+        first words start after one short synthesis instead of the whole reply. `cancel` stops
+        playback between (or during) sentences for barge-in."""
         self._touch()
+        cancel = cancel or threading.Event()
+        import re
+        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", text) if s.strip()]
+        if not sentences:
+            return
         if cfg("voice.tts", "piper") == "kokoro":
             try:
-                return self._say_kokoro(text)
+                return self._say_kokoro_stream(sentences, cancel)
             except Exception as e:
                 log(f"kokoro failed ({repr(e)}), falling back to piper")
+        self._say_piper(text)
+
+    def _say_piper(self, text: str) -> None:
         if not self.tts_voice.exists():
             log(f"piper voice missing: {self.tts_voice}"); return
         piper = str(Path(sys.executable).parent / "piper")
@@ -138,6 +174,50 @@ class Speech:
         play = subprocess.Popen(["pw-play", "--rate", str(rate), "--format", "f32", "--channels", "1", "--raw", "-"],
                                 stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         play.stdin.write(samples.astype("float32").tobytes()); play.stdin.close(); play.wait()
+
+    def _say_kokoro_stream(self, sentences: list[str], cancel: threading.Event) -> None:
+        if getattr(self, "kokoro", None) is None:
+            from kokoro_onnx import Kokoro
+            log("loading kokoro")
+            self.kokoro = Kokoro(str(MODELS / "kokoro-v1.0.onnx"), str(MODELS / "voices-v1.0.bin"))
+        voice = cfg("voice.kokoro_voice", "bm_george")
+        lang = "en-gb" if voice.startswith("b") else "en-us"
+        speed = float(cfg("voice.kokoro_speed", 1.0))
+        clips: queue.Queue = queue.Queue(maxsize=2)
+
+        def synth():
+            for s in sentences:
+                if cancel.is_set():
+                    break
+                try:
+                    clips.put(self.kokoro.create(s, voice=voice, speed=speed, lang=lang))
+                except Exception as e:
+                    log(f"kokoro synth error: {repr(e)}")
+            clips.put(None)
+
+        threading.Thread(target=synth, daemon=True).start()
+        while True:
+            item = clips.get()
+            if item is None or cancel.is_set():
+                break
+            samples, rate = item
+            self.player = subprocess.Popen(["pw-play", "--rate", str(rate), "--format", "f32", "--channels", "1", "--raw", "-"],
+                                           stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            try:
+                self.player.stdin.write(samples.astype("float32").tobytes()); self.player.stdin.close()
+            except BrokenPipeError:
+                pass
+            while self.player.poll() is None:
+                if cancel.is_set():
+                    self.player.kill(); break
+                time.sleep(0.05)
+        self.player = None
+
+    def stop(self) -> None:
+        """Barge-in: kill whatever is playing right now."""
+        p = getattr(self, "player", None)
+        if p is not None and p.poll() is None:
+            p.kill()
 
     def maybe_unload(self):
         if self.stt is not None and time.time() - self.last_used > self.idle:
@@ -187,6 +267,8 @@ class Listener:
         self.ptt = threading.Event()
         self.speech = Speech(); self.brain = Brain()
         self.busy = threading.Lock()
+        self.phase = "idle"            # idle | recording | thinking | speaking
+        self.cancel = threading.Event()
 
     def record_utterance(self, max_s=15.0, silence_s=1.2, thresh=0.012):
         """Collect audio until trailing silence. Returns float32 mono at 16 kHz in [-1, 1]."""
@@ -214,31 +296,51 @@ class Listener:
                 break
         return np.concatenate(chunks) if chunks else np.zeros(0, "float32")
 
+    def interrupt(self):
+        """Barge-in: stop speaking or thinking, then listen again."""
+        log("interrupt")
+        self.cancel.set()
+        self.brain.cancel()
+        self.speech.stop()
+        threading.Thread(target=self.handle, args=("interrupt",), daemon=True).start()
+
     def handle(self, why: str):
-        if not self.busy.acquire(blocking=False):
+        # Wait briefly for a cancelled handler to unwind, then take over.
+        if not self.busy.acquire(timeout=3.0):
             return
+        cancel = self.cancel = threading.Event()
         try:
+            self.phase = "recording"
             chime("listen"); log(f"listening ({why})")
             with self.q.mutex:
                 self.q.queue.clear()
             audio = self.record_utterance()
             chime("done")  # capture finished; now transcribing
+            self.phase = "thinking"
             log(f"captured {len(audio) / RATE:.1f}s")
             if len(audio) < RATE * 0.5:
                 log("too short"); return
             text = self.speech.transcribe(audio)
+            if cancel.is_set():
+                return
             if not text:
-                log("heard nothing"); self.speech.say(cfg("voice.nothing_phrase", "I did not catch that.")); return
+                log("heard nothing"); self.phase = "speaking"
+                self.speech.say(cfg("voice.nothing_phrase", "I did not catch that."), cancel); return
             log(f"heard: {text}"); notify("You said", text)
             ack = cfg("voice.ack_phrase", "On it.")
             if ack:
-                self.speech.say(ack)  # spoken feedback before the brain starts thinking
+                self.phase = "speaking"; self.speech.say(ack, cancel)  # spoken feedback before thinking
+            self.phase = "thinking"
             reply = self.brain.ask(text)
+            if cancel.is_set() or not reply:
+                return
             log(f"reply: {reply[:200]}"); notify("Praetor", reply)
-            self.speech.say(reply)
+            self.phase = "speaking"
+            self.speech.say(reply, cancel)
         except Exception as e:
             log(f"error: {repr(e)}"); notify("Praetor voice error", str(e))
         finally:
+            self.phase = "idle"
             self.busy.release()
 
     def run(self):
@@ -251,19 +353,26 @@ class Listener:
             while True:
                 if self.ptt.is_set():
                     self.ptt.clear()
-                    threading.Thread(target=self.handle, args=("push-to-talk",), daemon=True).start()
-                if self.busy.locked():
-                    # A handler owns the microphone queue while it records; do not drain it here.
+                    if self.phase in ("thinking", "speaking"):
+                        self.interrupt()
+                    elif self.phase == "idle":
+                        threading.Thread(target=self.handle, args=("push-to-talk",), daemon=True).start()
+                if self.phase == "recording":
+                    # The handler owns the microphone queue while it records; do not drain it here.
                     time.sleep(0.05); continue
                 try:
                     frame = self.q.get(timeout=0.5)
                 except queue.Empty:
                     self.speech.maybe_unload(); continue
+                # Wake-word detection keeps running while thinking or speaking so you can barge in.
                 scores = self.oww.predict(frame)
                 best = max(scores.values()) if scores else 0.0
                 if best >= self.threshold:
                     self.oww.reset()
-                    threading.Thread(target=self.handle, args=("wake word",), daemon=True).start()
+                    if self.phase in ("thinking", "speaking"):
+                        self.interrupt()
+                    elif self.phase == "idle":
+                        threading.Thread(target=self.handle, args=("wake word",), daemon=True).start()
                 elif best >= 0.2:
                     log(f"wake near-miss score {best:.2f} (threshold {self.threshold})")
                 self.speech.maybe_unload()
