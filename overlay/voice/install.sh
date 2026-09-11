@@ -4,8 +4,13 @@ set -euo pipefail
 base="$HOME/.local/share/praetor/voice"; venv="$base/.venv"; models="$base/models"
 src="${PRAETOR_PATH:-$HOME/.local/share/praetor}/voice"
 mkdir -p "$models"
-# System Python may be newer than the ML wheels support; pin the venv to 3.12 via uv.
-[[ -x "$venv/bin/python" ]] || uv venv --python 3.12 "$venv" >/dev/null
+# openWakeWord pulls tflite-runtime, which ships wheels only up to CPython 3.11 (2026-09),
+# so the venv is pinned to 3.11 via uv. Rebuild it if it exists with another version.
+py_want="3.11"
+if [[ -x "$venv/bin/python" ]] && ! "$venv/bin/python" -c "import sys; sys.exit(0 if sys.version_info[:2]==(3,11) else 1)"; then
+  uv venv --clear --python "$py_want" "$venv" >/dev/null
+fi
+[[ -x "$venv/bin/python" ]] || uv venv --python "$py_want" "$venv" >/dev/null
 uv pip install --python "$venv/bin/python" -q -r "$src/requirements.txt"
 cp "$src/praetor_voice.py" "$base/praetor_voice.py"
 # Wake-word models ship with openWakeWord but are fetched on first use; do it now.
