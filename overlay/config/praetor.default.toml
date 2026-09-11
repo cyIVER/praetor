@@ -22,6 +22,10 @@ wake_models = ["hey_jarvis"]
 tts = "piper"
 stt_model = "small"
 idle_unload_seconds = 300
+brain = "local"
+relay_url = ""
+piper_voice = "en_US-lessac-medium"
+wake_threshold = 0.5
 
 [agents]
 scratchpads = ["hermes", "claude", "codex"]

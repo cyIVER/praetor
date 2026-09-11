@@ -50,6 +50,10 @@ wake_models = ["hey_jarvis"]    # openWakeWord model names or paths
 tts         = "piper"           # "piper" | "kokoro"
 stt_model   = "small"           # faster-whisper size: tiny|base|small
 idle_unload_seconds = 300
+brain       = "local"           # "local" = hermes chat -q on this machine; "remote" = JARVIS voice relay
+relay_url   = ""                # remote only, e.g. "http://100.64.0.1:8765"; token in ~/.config/praetor/voice-relay.token
+piper_voice = "en_US-lessac-medium"
+wake_threshold = 0.5            # openWakeWord score 0..1; lower = more sensitive
 
 [agents]
 scratchpads = ["hermes", "claude", "codex"]   # order = hotkey order

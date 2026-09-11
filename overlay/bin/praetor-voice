@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# praetor-voice start|stop|restart|status|log|ptt|install
+set -euo pipefail
+case "${1:-status}" in
+  start|stop|restart) systemctl --user "$1" praetor-voice.service ;;
+  status) systemctl --user status praetor-voice.service --no-pager | head -8 ;;
+  log) journalctl --user -u praetor-voice.service -n "${2:-40}" --no-pager ;;
+  ptt) pid="$(cat "$HOME/.local/state/praetor/voice.pid" 2>/dev/null || true)"
+       [[ -n "$pid" ]] && kill -USR1 "$pid" || notify-send -a Praetor "Voice" "praetor-voice is not running" ;;
+  install) bash "${PRAETOR_PATH:-$HOME/.local/share/praetor}/voice/install.sh" ;;
+  *) echo "usage: praetor-voice start|stop|restart|status|log [n]|ptt|install" >&2; exit 1 ;;
+esac
