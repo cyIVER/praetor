@@ -4,6 +4,8 @@
 # the machine has to reach the tailnet on its own (unencrypted disk, remote
 # reboots). Everything interactive stays in the user-side praetor-first-boot.
 set -uo pipefail
+# systemd units start with no HOME; the Hermes installer writes $HOME/.hermes.
+export HOME="${HOME:-/root}"
 state=/var/lib/praetor
 mkdir -p "$state"
 log=$state/first-boot-root.log

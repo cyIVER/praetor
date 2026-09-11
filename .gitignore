@@ -12,3 +12,4 @@ node_modules/
 iso/build.log
 # generated from the theme .svg sources by install/user/20-theme.sh and the ISO builder
 overlay/themes/*/backgrounds/*.png
+iso/flash.log
