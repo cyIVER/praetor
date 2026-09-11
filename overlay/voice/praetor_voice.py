@@ -484,15 +484,25 @@ class Listener:
             turn = 0
             while True:
                 turn += 1
+                log(f"listening ({why if turn == 1 else 'follow-up'})")
+                if turn == 1:
+                    # Conversational acknowledgement instead of a chime (spoken; falls back to the chime
+                    # if the list is empty). Follow-up turns just listen.
+                    import random
+                    greetings = cfg("voice.wake_replies", ["Yes?", "Go ahead.", "Listening.", "I'm here."])
+                    if greetings:
+                        self.phase = "speaking"; self.speech.say(random.choice(list(greetings)), cancel)
+                    else:
+                        chime("listen")
                 self.phase = "recording"
-                chime("listen"); log(f"listening ({why if turn == 1 else 'follow-up'})")
                 with self.q.mutex:
                     self.q.queue.clear()
                 # After the first turn, wait a few seconds for a follow-up instead of a wake word.
                 audio = self.record_utterance(onset_wait=followup if turn > 1 else 0.0)
                 if turn > 1 and len(audio) == 0:
                     log("no follow-up; back to idle"); return
-                chime("done")  # capture finished; now transcribing
+                if cfg("voice.done_chime", False):
+                    chime("done")  # optional: capture finished; the streamed answer follows quickly anyway
                 self.phase = "thinking"
                 log(f"captured {len(audio) / RATE:.1f}s")
                 if len(audio) < RATE * 0.5:
