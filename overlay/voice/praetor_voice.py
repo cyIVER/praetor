@@ -171,6 +171,7 @@ class Listener:
     def record_utterance(self, max_s=15.0, silence_s=1.2, thresh=0.012):
         """Collect audio until trailing silence. Returns float32 mono at 16 kHz in [-1, 1]."""
         np = self.np; chunks = []; started = time.time(); last_voice = time.time()
+        floor_frames = []  # first ~0.3 s measures the room noise floor; speech must rise above it
         while True:
             try:
                 c = self.q.get(timeout=1.0)
@@ -179,6 +180,12 @@ class Listener:
             f = c.astype("float32") / 32768.0
             chunks.append(f)
             rms = float(np.sqrt(np.mean(f * f)))
+            if len(floor_frames) < 4:
+                floor_frames.append(rms)
+                if len(floor_frames) == 4:
+                    thresh = max(thresh, 3.0 * sum(floor_frames) / 4)
+                    log(f"noise floor {sum(floor_frames) / 4:.4f}, voice threshold {thresh:.4f}")
+                continue
             if rms > thresh:
                 last_voice = time.time()
             if time.time() - last_voice > silence_s and time.time() - started > 1.5:
