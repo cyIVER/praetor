@@ -39,6 +39,7 @@ tailscale_hostname = ""         # defaults to system.hostname
 wayvnc = false                  # true => wayvnc bound to the Tailscale IP only
 wayvnc_bind = "tailscale"       # "tailscale" | an explicit IP
 always_on = false               # true => ignore lid switch and mask sleep targets (headless/remote use)
+sunshine = false                # true => install Sunshine (AUR) for Moonlight streaming; KMS capture, tailnet-only
 
 [theme]
 default = "imperium"            # "imperium" | "obsidian" | any theme dir name

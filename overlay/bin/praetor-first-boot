@@ -39,6 +39,31 @@ if [[ "$(praetor-config remote.wayvnc 2>/dev/null)" == "true" ]]; then
   systemctl --user enable --now wayvnc.service || true
 fi
 
+# Sunshine (Moonlight host) on the Tailscale address only. Learned 2026-09-11:
+# wlroots screencopy capture fails to import frames on Hyprland+Intel (EGL bad match);
+# KMS capture works with the VAAPI encoders. The web UI rejects non-localhost origins
+# unless listed, and Tailscale addresses do not count as LAN.
+if [[ "$(praetor-config remote.sunshine 2>/dev/null)" == "true" ]]; then
+  command -v sunshine >/dev/null || yay -S --noconfirm --needed sunshine-bin || true
+  if command -v sunshine >/dev/null; then
+    mkdir -p "$HOME/.config/sunshine" "$HOME/.config/systemd/user"
+    ts_ip="$(tailscale ip -4 2>/dev/null | head -1)"
+    ts_name="$(tailscale status --self --json 2>/dev/null | python3 -c 'import sys,json; d=json.load(sys.stdin)["Self"]; print(d.get("DNSName","").rstrip("."))' 2>/dev/null || true)"
+    short="${ts_name%%.*}"
+    origins="https://localhost:47990"
+    [[ -n "$short" ]]   && origins="$origins,https://$short:47990"
+    [[ -n "$ts_name" ]] && origins="$origins,https://$ts_name:47990"
+    [[ -n "$ts_ip" ]]   && origins="$origins,https://$ts_ip:47990"
+    cfg="$HOME/.config/sunshine/sunshine.conf"; touch "$cfg"
+    sed -i '/^csrf_allowed_origins/d; /^origin_web_ui_allowed/d; /^capture/d' "$cfg"
+    printf 'csrf_allowed_origins = %s\norigin_web_ui_allowed = wan\ncapture = kms\n' "$origins" >> "$cfg"
+    printf '[Unit]\nDescription=Sunshine self-hosted game stream host\nAfter=graphical-session.target\nPartOf=graphical-session.target\n[Service]\nExecStart=/usr/bin/sunshine\nRestart=on-failure\nRestartSec=5s\n[Install]\nWantedBy=graphical-session.target\n' \
+      > "$HOME/.config/systemd/user/sunshine.service"
+    systemctl --user daemon-reload; systemctl --user enable --now sunshine.service || true
+    sudo ufw allow in on tailscale0 comment tailnet >/dev/null 2>&1 || true
+  fi
+fi
+
 touch "$state/first-boot.done"
 notify-send "Praetor" "First-boot setup finished." 2>/dev/null || true
 echo "== done $(date -Is) =="
