@@ -80,8 +80,13 @@ class Brain:
         return reply.strip() or "I got no answer from mission control."
 
     def _local(self, text: str) -> str:
-        out = subprocess.run(["hermes", "chat", "-q", text], capture_output=True, text=True, timeout=300)
-        return (out.stdout or out.stderr).strip()[-2000:] or "Hermes returned nothing."
+        # -Q: quiet/programmatic output (no banner, box art, or session footer).
+        out = subprocess.run(["hermes", "chat", "-Q", "--oneshot", "-q", text],
+                             capture_output=True, text=True, timeout=300)
+        reply = (out.stdout or "").strip()
+        if not reply:
+            reply = (out.stderr or "").strip()[-500:]
+        return reply[-2000:] or "Hermes returned nothing."
 
 
 class Speech:
