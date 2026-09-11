@@ -423,8 +423,13 @@ class Listener:
         import numpy as np
         from openwakeword.model import Model
         self.np = np
-        models = cfg("voice.wake_models", ["hey_jarvis"])
-        self.oww = Model(wakeword_models=list(models), inference_framework="onnx")
+        # Wake models: openWakeWord's built-ins by name (hey_jarvis...) or Praetor's own trained
+        # models by name when <name>.onnx exists in the models folder (hey_praetor).
+        models = []
+        for m in cfg("voice.wake_models", ["hey_jarvis"]):
+            custom = MODELS / f"{m}.onnx"
+            models.append(str(custom) if custom.exists() else m)
+        self.oww = Model(wakeword_models=models, inference_framework="onnx")
         self.threshold = float(cfg("voice.wake_threshold", 0.5))
         self.q: queue.Queue = queue.Queue()
         self.ptt = threading.Event()

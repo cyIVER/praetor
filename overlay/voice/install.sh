@@ -13,6 +13,8 @@ fi
 [[ -x "$venv/bin/python" ]] || uv venv --python "$py_want" "$venv" >/dev/null
 uv pip install --python "$venv/bin/python" -q -r "$src/requirements.txt"
 cp "$src/praetor_voice.py" "$base/praetor_voice.py"
+# Praetor-trained wake-word models ship with the overlay (e.g. hey_praetor.onnx).
+cp "$src"/models/*.onnx "$models/" 2>/dev/null || true
 # Wake-word models ship with openWakeWord but are fetched on first use; do it now.
 "$venv/bin/python" - <<'PY'
 import openwakeword
