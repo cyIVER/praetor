@@ -169,13 +169,17 @@ class Listener:
             with self.q.mutex:
                 self.q.queue.clear()
             audio = self.record_utterance()
+            chime("done")  # capture finished; now transcribing
             log(f"captured {len(audio) / RATE:.1f}s")
             if len(audio) < RATE * 0.5:
                 log("too short"); return
             text = self.speech.transcribe(audio)
             if not text:
-                log("heard nothing"); return
+                log("heard nothing"); self.speech.say(cfg("voice.nothing_phrase", "I did not catch that.")); return
             log(f"heard: {text}"); notify("You said", text)
+            ack = cfg("voice.ack_phrase", "On it.")
+            if ack:
+                self.speech.say(ack)  # spoken feedback before the brain starts thinking
             reply = self.brain.ask(text)
             log(f"reply: {reply[:200]}"); notify("Praetor", reply)
             self.speech.say(reply)
