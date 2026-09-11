@@ -142,7 +142,17 @@ class Speech:
         self._touch()
         cancel = cancel or threading.Event()
         import re
-        sentences = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", text) if s.strip()]
+        parts = [s.strip() for s in re.split(r"(?<=[.!?])\s+|\n+", text) if s.strip()]
+        # Group short sentences into ~200-character chunks: the first chunk starts speech quickly,
+        # later chunks keep Kokoro's phrasing natural instead of clipping every sentence.
+        sentences, cur = [], ""
+        for s in parts:
+            if cur and len(cur) + len(s) > 200:
+                sentences.append(cur); cur = s
+            else:
+                cur = f"{cur} {s}".strip()
+        if cur:
+            sentences.append(cur)
         if not sentences:
             return
         if cfg("voice.tts", "piper") == "kokoro":
@@ -196,22 +206,34 @@ class Speech:
             clips.put(None)
 
         threading.Thread(target=synth, daemon=True).start()
-        while True:
-            item = clips.get()
-            if item is None or cancel.is_set():
-                break
-            samples, rate = item
-            self.player = subprocess.Popen(["pw-play", "--rate", str(rate), "--format", "f32", "--channels", "1", "--raw", "-"],
-                                           stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            try:
-                self.player.stdin.write(samples.astype("float32").tobytes()); self.player.stdin.close()
-            except BrokenPipeError:
-                pass
-            while self.player.poll() is None:
-                if cancel.is_set():
-                    self.player.kill(); break
-                time.sleep(0.05)
+        # One continuous player for the whole reply: clips are appended to its stdin as they are
+        # synthesised, so there are no gaps between chunks and the phrasing matches a single pass.
         self.player = None
+        try:
+            while True:
+                item = clips.get()
+                if item is None or cancel.is_set():
+                    break
+                samples, rate = item
+                if self.player is None:
+                    self.player = subprocess.Popen(
+                        ["pw-play", "--rate", str(rate), "--format", "f32", "--channels", "1", "--raw", "-"],
+                        stdin=subprocess.PIPE, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                try:
+                    self.player.stdin.write(samples.astype("float32").tobytes()); self.player.stdin.flush()
+                except BrokenPipeError:
+                    break
+            if self.player is not None:
+                try:
+                    self.player.stdin.close()
+                except BrokenPipeError:
+                    pass
+                while self.player.poll() is None:
+                    if cancel.is_set():
+                        self.player.kill(); break
+                    time.sleep(0.05)
+        finally:
+            self.player = None
 
     def stop(self) -> None:
         """Barge-in: kill whatever is playing right now."""
