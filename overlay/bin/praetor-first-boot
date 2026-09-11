@@ -55,8 +55,9 @@ if [[ "$(praetor-config remote.sunshine 2>/dev/null)" == "true" ]]; then
     [[ -n "$ts_name" ]] && origins="$origins,https://$ts_name:47990"
     [[ -n "$ts_ip" ]]   && origins="$origins,https://$ts_ip:47990"
     cfg="$HOME/.config/sunshine/sunshine.conf"; touch "$cfg"
-    sed -i '/^csrf_allowed_origins/d; /^origin_web_ui_allowed/d; /^capture/d' "$cfg"
-    printf 'csrf_allowed_origins = %s\norigin_web_ui_allowed = wan\ncapture = kms\n' "$origins" >> "$cfg"
+    sed -i '/^csrf_allowed_origins/d; /^origin_web_ui_allowed/d; /^capture/d; /^qp/d' "$cfg"
+    printf 'csrf_allowed_origins = %s\norigin_web_ui_allowed = wan\ncapture = kms
+qp = 20\n' "$origins" >> "$cfg"
     printf '[Unit]\nDescription=Sunshine self-hosted game stream host\nAfter=graphical-session.target\nPartOf=graphical-session.target\n[Service]\nExecStart=/usr/bin/sunshine\nRestart=on-failure\nRestartSec=5s\n[Install]\nWantedBy=graphical-session.target\n' \
       > "$HOME/.config/systemd/user/sunshine.service"
     systemctl --user daemon-reload; systemctl --user enable --now sunshine.service || true
