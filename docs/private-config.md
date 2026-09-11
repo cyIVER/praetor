@@ -56,6 +56,11 @@ brain       = "local"           # "local" = hermes chat -q on this machine; "rem
 relay_url   = ""                # remote only, e.g. "http://100.64.0.1:8765"; token in ~/.config/praetor/voice-relay.token
 piper_voice = "en_US-lessac-medium"
 wake_threshold = 0.5            # openWakeWord score 0..1; lower = more sensitive
+reasoning   = "none"            # Hermes reasoning effort for voice turns (latency first)
+toolsets    = ""                # comma-separated Hermes toolsets for voice, "" = Hermes defaults (terminal, browser, computer_use...)
+ack_phrase  = "On it."          # spoken right after transcription; "" to disable
+nothing_phrase = "I did not catch that."
+# prompt_prefix = "..."          # override the voice-mode instruction prepended to every request
 
 [agents]
 scratchpads = ["hermes", "claude", "codex"]   # order = hotkey order
