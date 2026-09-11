@@ -126,11 +126,40 @@ class Speech:
             log("unloading STT after idle"); self.stt = None
 
 
+class Mic:
+    """Capture from PipeWire's default source via pw-record: follows the user's chosen input
+    (headset, laptop mic) and avoids PortAudio's raw-ALSA device picking, which delivered
+    silence from the onboard DMIC and never saw USB headsets."""
+    def __init__(self, q: queue.Queue, np):
+        self.q, self.np = q, np
+        self.proc = subprocess.Popen(
+            ["pw-record", "--rate", str(RATE), "--channels", "1", "--format", "s16", "-"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
+        threading.Thread(target=self._pump, daemon=True).start()
+
+    def _pump(self):
+        need = FRAME * 2
+        while True:
+            buf = self.proc.stdout.read(need)
+            if not buf:
+                log("pw-record ended; restarting capture in 2s"); time.sleep(2)
+                self.proc = subprocess.Popen(
+                    ["pw-record", "--rate", str(RATE), "--channels", "1", "--format", "s16", "-"],
+                    stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
+                continue
+            while len(buf) < need:
+                more = self.proc.stdout.read(need - len(buf))
+                if not more:
+                    break
+                buf += more
+            self.q.put(self.np.frombuffer(buf, dtype="int16").copy())
+
+
 class Listener:
     def __init__(self):
-        import numpy as np, sounddevice as sd
+        import numpy as np
         from openwakeword.model import Model
-        self.np, self.sd = np, sd
+        self.np = np
         models = cfg("voice.wake_models", ["hey_jarvis"])
         self.oww = Model(wakeword_models=list(models), inference_framework="onnx")
         self.threshold = float(cfg("voice.wake_threshold", 0.5))
@@ -138,9 +167,6 @@ class Listener:
         self.ptt = threading.Event()
         self.speech = Speech(); self.brain = Brain()
         self.busy = threading.Lock()
-
-    def _cb(self, indata, frames, t, status):
-        self.q.put(indata[:, 0].copy())
 
     def record_utterance(self, max_s=15.0, silence_s=1.2, thresh=0.012):
         """Collect audio until trailing silence. Returns float32 mono at 16 kHz in [-1, 1]."""
@@ -193,7 +219,8 @@ class Listener:
         STATE.mkdir(parents=True, exist_ok=True)
         (STATE / "voice.pid").write_text(str(os.getpid()))
         log(f"ready: wake={cfg('voice.wake_models', ['hey_jarvis'])} brain={self.brain.mode}")
-        with self.sd.InputStream(samplerate=RATE, channels=1, dtype="int16", blocksize=FRAME, callback=self._cb):
+        Mic(self.q, self.np)
+        if True:
             while True:
                 if self.ptt.is_set():
                     self.ptt.clear()
