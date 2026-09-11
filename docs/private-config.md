@@ -52,7 +52,11 @@ kokoro_voice = "bm_george"      # kokoro voices: af_heart, af_bella, am_michael,
 kokoro_speed = 1.0
 stt_model   = "small"           # faster-whisper size: tiny|base|small
 idle_unload_seconds = 300
-brain       = "local"           # "local" = hermes chat -q on this machine; "remote" = JARVIS voice relay
+brain       = "api"             # "api" = local Hermes API server (streaming, persistent session; recommended)
+                                #   "local" = hermes chat -q per turn (8-40 s); "remote" = a JARVIS voice relay
+api_url     = "http://127.0.0.1:8642"   # api only; key in ~/.config/praetor/hermes-api.key (platforms.api_server.extra.key)
+api_session = "praetor-voice"   # api only; one persistent Hermes session keeps conversational context
+followup_seconds = 6            # after a reply, listen this long for a follow-up without the wake word
 relay_url   = ""                # remote only, e.g. "http://100.64.0.1:8765"; token in ~/.config/praetor/voice-relay.token
 piper_voice = "en_US-lessac-medium"
 wake_threshold = 0.5            # openWakeWord score 0..1; lower = more sensitive
