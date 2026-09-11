@@ -84,6 +84,11 @@ class Brain:
         # -Q: quiet/programmatic output. It still prints a "session_id: ..." line first; drop it.
         # Voice favours latency: reasoning effort is configurable and defaults to none.
         cmd = ["hermes", "chat", "-Q", "--oneshot", "--reasoning", cfg("voice.reasoning", "none")]
+        model = cfg("voice.model", "")
+        if model:  # a faster model for spoken turns than the one coding sessions use
+            cmd += ["-m", model]
+            if cfg("voice.provider", ""):
+                cmd += ["--provider", cfg("voice.provider", "")]
         toolsets = cfg("voice.toolsets", "")
         if toolsets:
             cmd += ["-t", toolsets]
@@ -292,11 +297,16 @@ class Listener:
         self.phase = "idle"            # idle | recording | thinking | speaking
         self.cancel = threading.Event()
 
-    def record_utterance(self, max_s=15.0, silence_s=1.2, thresh=0.012):
-        """Collect audio until trailing silence. Returns float32 mono at 16 kHz in [-1, 1]."""
+    def record_utterance(self, max_s=15.0, silence_s=1.2, thresh=0.012, onset_wait=0.0):
+        """Collect audio until trailing silence. Returns float32 mono at 16 kHz in [-1, 1].
+        onset_wait > 0: wait up to that many seconds for speech to start (follow-up turns);
+        return empty audio if nobody speaks."""
         np = self.np; chunks = []; started = time.time(); last_voice = time.time()
         floor_frames = []  # first ~0.3 s measures the room noise floor; speech must rise above it
+        heard_voice = False
         while True:
+            if onset_wait and not heard_voice and time.time() - started > onset_wait:
+                return np.zeros(0, "float32")
             try:
                 c = self.q.get(timeout=1.0)
             except queue.Empty:
@@ -311,7 +321,9 @@ class Listener:
                     log(f"noise floor {sum(floor_frames) / 4:.4f}, voice threshold {thresh:.4f}")
                 continue
             if rms > thresh:
-                last_voice = time.time()
+                last_voice = time.time(); heard_voice = True
+            if onset_wait and not heard_voice:
+                continue  # still waiting for the follow-up to begin
             if time.time() - last_voice > silence_s and time.time() - started > 1.5:
                 break
             if time.time() - started > max_s:
@@ -331,34 +343,43 @@ class Listener:
         if not self.busy.acquire(timeout=3.0):
             return
         cancel = self.cancel = threading.Event()
+        followup = float(cfg("voice.followup_seconds", 6))
         try:
-            self.phase = "recording"
-            chime("listen"); log(f"listening ({why})")
-            with self.q.mutex:
-                self.q.queue.clear()
-            audio = self.record_utterance()
-            chime("done")  # capture finished; now transcribing
-            self.phase = "thinking"
-            log(f"captured {len(audio) / RATE:.1f}s")
-            if len(audio) < RATE * 0.5:
-                log("too short"); return
-            text = self.speech.transcribe(audio)
-            if cancel.is_set():
-                return
-            if not text:
-                log("heard nothing"); self.phase = "speaking"
-                self.speech.say(cfg("voice.nothing_phrase", "I did not catch that."), cancel); return
-            log(f"heard: {text}"); notify("You said", text)
-            ack = cfg("voice.ack_phrase", "On it.")
-            if ack:
-                self.phase = "speaking"; self.speech.say(ack, cancel)  # spoken feedback before thinking
-            self.phase = "thinking"
-            reply = self.brain.ask(text)
-            if cancel.is_set() or not reply:
-                return
-            log(f"reply: {reply[:200]}"); notify("Praetor", reply)
-            self.phase = "speaking"
-            self.speech.say(reply, cancel)
+            turn = 0
+            while True:
+                turn += 1
+                self.phase = "recording"
+                chime("listen"); log(f"listening ({why if turn == 1 else 'follow-up'})")
+                with self.q.mutex:
+                    self.q.queue.clear()
+                # After the first turn, wait a few seconds for a follow-up instead of a wake word.
+                audio = self.record_utterance(onset_wait=followup if turn > 1 else 0.0)
+                if turn > 1 and len(audio) == 0:
+                    log("no follow-up; back to idle"); return
+                chime("done")  # capture finished; now transcribing
+                self.phase = "thinking"
+                log(f"captured {len(audio) / RATE:.1f}s")
+                if len(audio) < RATE * 0.5:
+                    log("too short"); return
+                text = self.speech.transcribe(audio)
+                if cancel.is_set():
+                    return
+                if not text:
+                    log("heard nothing"); self.phase = "speaking"
+                    self.speech.say(cfg("voice.nothing_phrase", "I did not catch that."), cancel); return
+                log(f"heard: {text}"); notify("You said", text)
+                ack = cfg("voice.ack_phrase", "On it.")
+                if ack:
+                    self.phase = "speaking"; self.speech.say(ack, cancel)  # spoken feedback before thinking
+                self.phase = "thinking"
+                reply = self.brain.ask(text)
+                if cancel.is_set() or not reply:
+                    return
+                log(f"reply: {reply[:200]}"); notify("Praetor", reply)
+                self.phase = "speaking"
+                self.speech.say(reply, cancel)
+                if cancel.is_set() or followup <= 0:
+                    return
         except Exception as e:
             log(f"error: {repr(e)}"); notify("Praetor voice error", str(e))
         finally:
