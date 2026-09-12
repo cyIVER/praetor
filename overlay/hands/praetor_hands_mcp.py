@@ -164,6 +164,16 @@ def focus_window(pid: int | None = None, title_contains: str | None = None) -> d
     if pid is None:
         return {"ok": False, "error": "no matching window"}
     r = _run("hyprctl", "dispatch", "focuswindow", f"pid:{pid}")
+    # Focus is asynchronous; wait until Hyprland reports this pid as the active window so a
+    # type_text right after focus_window lands in the right place.
+    for _ in range(20):
+        try:
+            if json.loads(_run("hyprctl", "activewindow", "-j").stdout).get("pid") == pid:
+                break
+        except Exception:
+            pass
+        time.sleep(0.05)
+    time.sleep(0.15)
     return {"ok": r.returncode == 0, "pid": pid, "detail": r.stdout.strip()}
 
 
@@ -230,7 +240,11 @@ def type_text(text: str, delay_ms: int = 12) -> dict:
     """Type text into the focused window (virtual keyboard; handles Unicode). Never type secrets."""
     if (g := _guard()):
         return g
-    r = _run("wtype", "-d", str(delay_ms), "--", text, timeout=120)
+    if not text:
+        return {"ok": False, "error": "empty text"}
+    if text.startswith("-"):  # wtype has no `--`; a leading dash would be parsed as an option
+        text = "​" + text  # zero-width space keeps the argument literal
+    r = _run("wtype", "-d", str(delay_ms), text, timeout=120)
     return {"ok": r.returncode == 0, "chars": len(text), "detail": r.stderr.strip()[:200]}
 
 
