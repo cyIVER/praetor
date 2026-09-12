@@ -71,8 +71,17 @@ def _pointer_scale() -> float:
     return k
 
 
+MAX_SESSION_S = float(os.environ.get("HANDS_MAX_SESSION_S", "900"))  # a forgotten session ends itself
+
+
 def _driving() -> bool:
-    return (STATE / "hands.driving").exists()
+    f = STATE / "hands.driving"
+    if not f.exists():
+        return False
+    if time.time() - f.stat().st_mtime > MAX_SESSION_S:
+        _run(HANDS, "stop")  # stale session: restore the desktop and refuse further actions
+        return False
+    return True
 
 
 def _guard() -> dict | None:
