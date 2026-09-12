@@ -39,5 +39,6 @@ case "${1:-status}" in
     else
       notify-send -a Praetor "Praetor" "$text" 2>/dev/null || true
     fi ;;
-  *) echo "usage: praetor-hands start|stop|panic|status|announce <text>" >&2; exit 1 ;;
+  install) bash "${PRAETOR_PATH:-$HOME/.local/share/praetor}/hands/install.sh" ;;
+  *) echo "usage: praetor-hands start|stop|panic|status|announce <text>|install" >&2; exit 1 ;;
 esac

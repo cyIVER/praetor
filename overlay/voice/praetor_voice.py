@@ -471,6 +471,27 @@ class Listener:
                 break
         return np.concatenate(chunks) if chunks else np.zeros(0, "float32")
 
+    def _say_fifo(self):
+        """Other Praetor components (praetor-hands announce) write lines to ~/.local/state/praetor/voice.say
+        and they are spoken in the assistant's voice, without starting a listening turn."""
+        fifo = STATE / "voice.say"
+        try:
+            if fifo.exists() and not fifo.is_fifo():
+                fifo.unlink()
+            if not fifo.exists():
+                os.mkfifo(fifo)
+        except OSError as e:
+            log(f"say fifo unavailable: {e!r}"); return
+        while True:
+            try:
+                with open(fifo) as f:  # blocks until a writer opens it
+                    for line in f:
+                        text = line.strip()
+                        if text and not self.busy.locked():
+                            self.speech.say(text, threading.Event())
+            except Exception as e:
+                log(f"say fifo error: {e!r}"); time.sleep(1)
+
     def interrupt(self):
         """Barge-in: stop speaking or thinking, then listen again."""
         log("interrupt")
@@ -565,6 +586,7 @@ class Listener:
         (STATE / "voice.pid").write_text(str(os.getpid()))
         log(f"ready: wake={cfg('voice.wake_models', ['hey_jarvis'])} brain={self.brain.mode}")
         Mic(self.q, self.np)
+        threading.Thread(target=self._say_fifo, daemon=True).start()
         if True:
             while True:
                 if self.ptt.is_set():
