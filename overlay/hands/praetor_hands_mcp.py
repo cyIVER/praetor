@@ -164,8 +164,12 @@ def focus_window(pid: int | None = None, title_contains: str | None = None) -> d
     if pid is None:
         return {"ok": False, "error": "no matching window"}
     r = _run("hyprctl", "dispatch", "focuswindow", f"pid:{pid}")
-    # Focus is asynchronous; wait until Hyprland reports this pid as the active window so a
-    # type_text right after focus_window lands in the right place.
+    # Hyprland's keyboard focus for virtual-input clients follows the pointer, so also park the
+    # pointer inside the window and click once on its title area, the way a person would.
+    win = next((w for w in list_windows() if w["pid"] == pid), None)
+    if win:
+        _move(win["x"] + win["w"] // 2, win["y"] + min(18, win["h"] // 4))
+        _run("ydotool", "click", "0xC0")
     for _ in range(20):
         try:
             if json.loads(_run("hyprctl", "activewindow", "-j").stdout).get("pid") == pid:
@@ -173,8 +177,9 @@ def focus_window(pid: int | None = None, title_contains: str | None = None) -> d
         except Exception:
             pass
         time.sleep(0.05)
-    time.sleep(0.15)
-    return {"ok": r.returncode == 0, "pid": pid, "detail": r.stdout.strip()}
+    time.sleep(0.2)
+    active = json.loads(_run("hyprctl", "activewindow", "-j").stdout or "{}").get("pid")
+    return {"ok": active == pid, "pid": pid, "active_pid": active, "detail": r.stdout.strip()}
 
 
 @mcp.tool()
@@ -244,8 +249,10 @@ def type_text(text: str, delay_ms: int = 12) -> dict:
         return {"ok": False, "error": "empty text"}
     if text.startswith("-"):  # wtype has no `--`; a leading dash would be parsed as an option
         text = "​" + text  # zero-width space keeps the argument literal
+    active = json.loads(_run("hyprctl", "activewindow", "-j").stdout or "{}")
     r = _run("wtype", "-d", str(delay_ms), text, timeout=120)
-    return {"ok": r.returncode == 0, "chars": len(text), "detail": r.stderr.strip()[:200]}
+    return {"ok": r.returncode == 0, "chars": len(text), "typed_into": active.get("title", ""),
+            "detail": r.stderr.strip()[:200]}
 
 
 @mcp.tool()
