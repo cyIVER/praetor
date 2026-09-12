@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+# praetor-hands: the safety envelope around computer use (cua-driver via Hermes).
+#   praetor-hands start   - mark a driving session: crimson border, Waybar badge, notification
+#   praetor-hands stop    - end it: restore theme border, clear badge
+#   praetor-hands panic   - Super+Escape: kill cua-driver, restore everything
+#   praetor-hands status  - print "driving" or "idle"
+#   praetor-hands announce "<text>" - speak a short status line through praetor-voice
+set -uo pipefail
+state="$HOME/.local/state/praetor"; mkdir -p "$state"
+flag="$state/hands.driving"
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+export HYPRLAND_INSTANCE_SIGNATURE="${HYPRLAND_INSTANCE_SIGNATURE:-$(ls -t "$XDG_RUNTIME_DIR/hypr" 2>/dev/null | head -1)}"
+badge() { pkill -RTMIN+11 waybar 2>/dev/null || true; }   # signal 11 = custom/praetor-driving
+theme_border() { hyprctl reload >/dev/null 2>&1 || true; }  # re-reads the theme's border from config
+case "${1:-status}" in
+  start)
+    touch "$flag"
+    hyprctl keyword general:col.active_border "rgb(B3122E)" >/dev/null 2>&1 || true
+    hyprctl keyword general:border_size 4 >/dev/null 2>&1 || true
+    badge; notify-send -a Praetor -u critical "Praetor is driving" "Super+Escape stops it." 2>/dev/null || true ;;
+  stop)
+    [[ -f "$flag" ]] && unlink "$flag"
+    theme_border; badge ;;
+  panic)
+    [[ -f "$flag" ]] && unlink "$flag"
+    ~/.local/bin/cua-driver stop >/dev/null 2>&1 || true
+    pkill -f "cua-driver serve" 2>/dev/null || true
+    pkill -f "cua-driver mcp" 2>/dev/null || true
+    theme_border; badge
+    notify-send -a Praetor -u critical "Praetor hands stopped" "cua-driver killed; the agent no longer controls the desktop." 2>/dev/null || true
+    "$0" announce "Stopped." ;;
+  status)
+    [[ -f "$flag" ]] && echo driving || echo idle ;;
+  announce)
+    shift; text="${*:-}"; [[ -z "$text" ]] && exit 0
+    pid="$(cat "$state/voice.pid" 2>/dev/null || true)"
+    if [[ -n "$pid" ]] && kill -0 "$pid" 2>/dev/null && [[ -p "$state/voice.say" ]]; then
+      printf '%s\n' "$text" > "$state/voice.say"
+    else
+      notify-send -a Praetor "Praetor" "$text" 2>/dev/null || true
+    fi ;;
+  *) echo "usage: praetor-hands start|stop|panic|status|announce <text>" >&2; exit 1 ;;
+esac
