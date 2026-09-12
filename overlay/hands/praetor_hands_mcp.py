@@ -168,8 +168,14 @@ def focus_window(pid: int | None = None, title_contains: str | None = None) -> d
     # pointer inside the window and click once on its title area, the way a person would.
     win = next((w for w in list_windows() if w["pid"] == pid), None)
     if win:
-        _move(win["x"] + win["w"] // 2, win["y"] + min(18, win["h"] // 4))
-        _run("ydotool", "click", "0xC0")
+        # Park the pointer in the window body (not the header bar: clicking there opens app menus).
+        _move(win["x"] + win["w"] // 2, win["y"] + win["h"] // 2)
+        time.sleep(0.15)
+        try:
+            if json.loads(_run("hyprctl", "activewindow", "-j").stdout).get("pid") != pid:
+                _run("ydotool", "click", "0xC0")  # only click if hovering did not grant focus
+        except Exception:
+            pass
     for _ in range(20):
         try:
             if json.loads(_run("hyprctl", "activewindow", "-j").stdout).get("pid") == pid:
